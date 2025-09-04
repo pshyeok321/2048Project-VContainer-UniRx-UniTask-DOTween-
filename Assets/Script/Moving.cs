@@ -44,6 +44,7 @@ public class Moving : MonoBehaviour
     public void Move(int x2, int y2, bool combine)
     {
         combineOnArrive = combine;
+
         startPos = transform.position;
         targetPos = new Vector3(
             originOffset.x + cellSize.x * x2,
