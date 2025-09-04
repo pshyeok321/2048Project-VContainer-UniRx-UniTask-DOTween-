@@ -11,15 +11,8 @@ public class TileManager : MonoBehaviour
     [SerializeField] int width = 4;
     [SerializeField] int height = 4;
 
-    GameObject[] prefabs;
-
-    class Tile
-    {
-        public int value;
-        public GameObject view;
-        public bool mergedThisTurn;
-    }
-
+    GameObject[] prefabs; 
+    class Tile { public int value; public GameObject view; public bool mergedThisTurn; }
     Tile[,] grid;
 
     public enum Dir { Up, Down, Left, Right }
@@ -37,10 +30,7 @@ public class TileManager : MonoBehaviour
     public bool Spawn(int currentScore)
     {
         var empties = new List<Vector2Int>();
-        ForEachCell((x, y) =>
-        {
-            if (grid[x, y] == null) empties.Add(new Vector2Int(x, y));
-        });
+        ForEachCell((x, y) => { if (grid[x, y] == null) empties.Add(new Vector2Int(x, y)); });
         if (empties.Count == 0) return false;
 
         var c = empties[Random.Range(0, empties.Count)];
@@ -54,10 +44,7 @@ public class TileManager : MonoBehaviour
     public bool IsGameOver()
     {
         bool anyEmpty = false;
-        ForEachCell((x, y) =>
-        {
-            if (grid[x, y] == null) anyEmpty = true;
-        });
+        ForEachCell((x, y) => { if (grid[x, y] == null) anyEmpty = true; });
         if (anyEmpty) return false;
 
         for (int x = 0; x < width; x++)
@@ -68,7 +55,6 @@ public class TileManager : MonoBehaviour
                     (In(x, y + 1) && grid[x, y + 1].value == v))
                     return false;
             }
-
         return true;
     }
 
@@ -82,7 +68,6 @@ public class TileManager : MonoBehaviour
         int sy = dir == Dir.Up ? height - 1 : 0;
         int ey = dir == Dir.Up ? -1 : height;
 
-        // 이동 벡터 (스캔 방향과 분리)
         int dx = dir == Dir.Right ? 1 : dir == Dir.Left ? -1 : 0;
         int dy = dir == Dir.Up ? 1 : dir == Dir.Down ? -1 : 0;
 
@@ -99,11 +84,7 @@ public class TileManager : MonoBehaviour
                     SlideOrMerge(x, y, 0, dy, ref movedThisTurn, ref addScore);
         }
 
-        ForEachCell((x, y) =>
-        {
-            if (grid[x, y] != null) grid[x, y].mergedThisTurn = false;
-        });
-
+        ForEachCell((x, y) => { if (grid[x, y] != null) grid[x, y].mergedThisTurn = false; });
         return movedThisTurn;
     }
 
@@ -114,14 +95,9 @@ public class TileManager : MonoBehaviour
 
         int nx = x, ny = y;
 
-        // 빈칸 끝까지 미끄러짐
         while (In(nx + dx, ny + dy) && grid[nx + dx, ny + dy] == null)
-        {
-            nx += dx;
-            ny += dy;
-        }
+        { nx += dx; ny += dy; }
 
-        // 다음 칸에 타일이 있고 합체 가능?
         if (In(nx + dx, ny + dy) && grid[nx + dx, ny + dy] != null)
         {
             var dst = grid[nx + dx, ny + dy];
@@ -132,19 +108,17 @@ public class TileManager : MonoBehaviour
 
                 if (dst.view) Object.Destroy(dst.view);
 
-                // 움직이는 뷰를 목적지까지 combine=true로 이동(도착 시 자기 파괴)
                 MoveView(t, nx + dx, ny + dy, combine: true);
 
-                // 그 자리에 새 타일 스폰(pop)
                 grid[x, y] = null;
                 grid[nx + dx, ny + dy] = SpawnTile(newVal, nx + dx, ny + dy, pop: true);
                 grid[nx + dx, ny + dy].mergedThisTurn = true;
+
                 addScore += newVal;
                 return;
             }
         }
 
-        // 단순 슬라이드
         if (nx != x || ny != y)
         {
             movedThisTurn = true;
@@ -161,30 +135,35 @@ public class TileManager : MonoBehaviour
 
         var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
 
-        var mv = go.GetComponent<Moving>();
-        if (mv) mv.SetLayout(cellSize, originOffset);
+        // === DOTween/Moving 모두 지원 ===
+        var mvd = go.GetComponent<MovingDOTween>();
+        if (mvd) mvd.SetLayout(cellSize, originOffset);
+        else
+        {
+            var mv = go.GetComponent<Moving>();
+            if (mv) mv.SetLayout(cellSize, originOffset);
+        }
 
         if (pop) go.GetComponent<Animator>()?.SetTrigger("Spawn");
-
         return new Tile { value = value, view = go, mergedThisTurn = false };
     }
 
     void MoveView(Tile t, int x, int y, bool combine)
     {
-        var mv = t.view.GetComponent<Moving>();
-        if (mv) mv.Move(x, y, combine);
-        else t.view.transform.position = CellToWorld(x, y);
+        // === DOTween 우선, 없으면 기존 Moving, 둘 다 없으면 즉시 텔레포트 ===
+        var mvd = t.view.GetComponent<MovingDOTween>();
+        if (mvd) mvd.Move(x, y, combine);
+        else
+        {
+            var mv = t.view.GetComponent<Moving>();
+            if (mv) mv.Move(x, y, combine);
+            else t.view.transform.position = CellToWorld(x, y);
+        }
     }
 
-    Vector3 CellToWorld(int x, int y)
-        => new(originOffset.x + cellSize.x * x, originOffset.y + cellSize.y * y, 0);
+    Vector3 CellToWorld(int x, int y) =>
+        new(originOffset.x + cellSize.x * x, originOffset.y + cellSize.y * y, 0);
 
     bool In(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
-
-    void ForEachCell(System.Action<int, int> f)
-    {
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-                f(x, y);
-    }
+    void ForEachCell(System.Action<int, int> f) { for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) f(x, y); }
 }
