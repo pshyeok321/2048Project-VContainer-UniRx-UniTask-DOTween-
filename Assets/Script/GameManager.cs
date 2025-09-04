@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 
 public class GameManager : MonoBehaviour
 {
@@ -13,15 +15,13 @@ public class GameManager : MonoBehaviour
     [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
 
     [Header("Input")]
-    [SerializeField] float swipeThresholdPixels = 100f;     // 기본값 (DPI 비활성 시 사용)
-    [SerializeField] bool useDpiForSwipe = true;            // ✅ DPI 보정 사용
-    [SerializeField] [Range(0.05f, 0.5f)] float swipeThresholdInches = 0.20f; // 0.2 inch 권장
-    [SerializeField] float postMoveInputLockSeconds = 0.12f; // ✅ 이동 후 입력 잠금 (중복 스와이프 방지)
+    [SerializeField] float swipeThresholdPixels = 100f;
+    [SerializeField] bool useDpiForSwipe = true;
+    [SerializeField, Range(0.05f, 0.5f)] float swipeThresholdInches = 0.20f;
 
     enum Dir { Up, Down, Left, Right, None }
     Dir GetSwipeDir(Vector3 nrm)
     {
-        // ✅ 드래그한 방향 = 타일 이동 방향
         if (Mathf.Abs(nrm.x) > Mathf.Abs(nrm.y))
             return nrm.x > 0 ? Dir.Right : Dir.Left;
         else
@@ -35,11 +35,11 @@ public class GameManager : MonoBehaviour
     bool movedThisTurn, stopped;
     int addScore;
 
-    // 입력 잠금(간단 쿨다운)
-    float inputUnlockAtUnscaled = 0f;
-    bool InputLocked => TurnAnimTracker.Busy || Time.unscaledTime < inputUnlockAtUnscaled; // ✅ 애니 동기화
+    // UniTask 턴 실행 상태
+    bool turnRunning;
+    CancellationTokenSource turnCts;
 
-	void Start()
+    void Start()
     {
         if (BestScore) BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
         if (Score && string.IsNullOrEmpty(Score.text)) Score.text = "0";
@@ -51,13 +51,19 @@ public class GameManager : MonoBehaviour
         tm.Spawn(CurrentScore());
     }
 
+    void OnDestroy()
+    {
+        turnCts?.Cancel();
+        turnCts?.Dispose();
+    }
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape)) Application.Quit();
         if (stopped) return;
 
-        if (InputLocked) // ✅ 이동 직후 잠깐 입력 무시
-            return;
+        // 애니 중이거나 턴 로직이 돌고 있으면 입력 차단
+        if (turnRunning || TurnAnimTracker.Busy) return;
 
         if (BeginPressed())
         {
@@ -70,8 +76,6 @@ public class GameManager : MonoBehaviour
         if (swiping && Holding())
         {
             var gap = CurrentPointerPos() - firstPos;
-
-            // ✅ DPI 보정된 스와이프 임계값 계산
             float threshold = useDpiForSwipe && Screen.dpi > 0f
                 ? swipeThresholdInches * Screen.dpi
                 : swipeThresholdPixels;
@@ -82,9 +86,6 @@ public class GameManager : MonoBehaviour
                 var dir = GetSwipeDir(gap.normalized);
                 if (dir == Dir.None) return;
 
-                movedThisTurn = false;
-                addScore = 0;
-
                 var tdir = dir switch
                 {
                     Dir.Up => TileManager.Dir.Up,
@@ -94,19 +95,12 @@ public class GameManager : MonoBehaviour
                     _ => TileManager.Dir.Left
                 };
 
-                bool moved = tm.Sweep(tdir, out int gained, out bool anyMove);
-                movedThisTurn = anyMove;
-                addScore += gained;
+                // 🔄 이전 턴 취소(안전) 후, 새 턴 실행
+                turnCts?.Cancel();
+                turnCts?.Dispose();
+                turnCts = new CancellationTokenSource();
 
-                if (movedThisTurn)
-                {
-                    // ✅ 이동 성공 시, 잠깐 입력 잠금으로 중복 스와이프 방지
-                    inputUnlockAtUnscaled = Time.unscaledTime + Mathf.Max(0.08f, postMoveInputLockSeconds);
-
-                    tm.Spawn(CurrentScore());
-                    ApplyScore();
-                    if (tm.IsGameOver()) { stopped = true; if (Quit) Quit.SetActive(true); }
-                }
+                RunTurnAsync(tdir, turnCts.Token).Forget();
             }
         }
 
@@ -115,6 +109,40 @@ public class GameManager : MonoBehaviour
             swiping = false;
             swipeConsumed = false;
         }
+    }
+
+    async UniTaskVoid RunTurnAsync(TileManager.Dir tdir, CancellationToken ct)
+    {
+        if (turnRunning) return;
+        turnRunning = true;
+
+        movedThisTurn = false;
+        addScore = 0;
+
+        // 1) 값 로직 처리(슬라이드/머지). 여기서 이동 트윈들이 시작됨
+        bool moved = tm.Sweep(tdir, out int gained, out bool anyMove);
+        movedThisTurn = anyMove;
+        addScore += gained;
+
+        if (movedThisTurn)
+        {
+            // 2) 모든 슬라이드/머지 트윈이 끝날 때까지 대기
+            await TurnAwaiter.WaitAnimationsIdleAsync(ct);
+            if (ct.IsCancellationRequested) { turnRunning = false; return; }
+
+            // 3) 스폰 + 점수 적용 (스폰팝이 시작됨)
+            tm.Spawn(CurrentScore());
+            ApplyScore();
+
+            // 4) 스폰팝/머지 임팩트 등 잔여 트윈 대기
+            await TurnAwaiter.WaitAnimationsIdleAsync(ct);
+            if (ct.IsCancellationRequested) { turnRunning = false; return; }
+
+            // 5) 게임오버 체크
+            if (tm.IsGameOver()) { stopped = true; if (Quit) Quit.SetActive(true); }
+        }
+
+        turnRunning = false;
     }
 
     void ApplyScore()
@@ -169,7 +197,7 @@ public class GameManager : MonoBehaviour
         {
             if (Input.touchCount == 0) return true;
             var ph = Input.GetTouch(0).phase;
-            return ph == TouchPhase.Ended || ph == TouchPhase.Canceled;
+            return ph == TouchPhase.Ended || TouchPhase.Canceled == ph;
         }
         else return Input.GetMouseButtonUp(0);
     }
