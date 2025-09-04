@@ -11,7 +11,7 @@ public class TileManager : MonoBehaviour
     [SerializeField] int width = 4;
     [SerializeField] int height = 4;
 
-    GameObject[] prefabs; 
+    GameObject[] prefabs;
     class Tile { public int value; public GameObject view; public bool mergedThisTurn; }
     Tile[,] grid;
 
@@ -114,7 +114,9 @@ public class TileManager : MonoBehaviour
                 grid[nx + dx, ny + dy] = SpawnTile(newVal, nx + dx, ny + dy, pop: true);
                 grid[nx + dx, ny + dy].mergedThisTurn = true;
 
-                addScore += newVal;
+				TileFXDOTween.Merge(grid[nx + dx, ny + dy].view); // ✅ 머지 임팩트
+
+				addScore += newVal;
                 return;
             }
         }
@@ -128,27 +130,30 @@ public class TileManager : MonoBehaviour
         }
     }
 
-    Tile SpawnTile(int value, int x, int y, bool pop)
-    {
-        int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
-        idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
+	Tile SpawnTile(int value, int x, int y, bool pop)
+	{
+		int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
+		idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
 
-        var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
+		var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
 
-        // === DOTween/Moving 모두 지원 ===
-        var mvd = go.GetComponent<MovingDOTween>();
-        if (mvd) mvd.SetLayout(cellSize, originOffset);
-        else
-        {
-            var mv = go.GetComponent<Moving>();
-            if (mv) mv.SetLayout(cellSize, originOffset);
-        }
+		// === DOTween/Moving 모두 지원 ===
+		var mvd = go.GetComponent<MovingDOTween>();
+		if (mvd) mvd.SetLayout(cellSize, originOffset);
+		else
+		{
+			var mv = go.GetComponent<Moving>();
+			if (mv) mv.SetLayout(cellSize, originOffset);
+		}
 
-        if (pop) go.GetComponent<Animator>()?.SetTrigger("Spawn");
-        return new Tile { value = value, view = go, mergedThisTurn = false };
-    }
+		if (pop) TileFXDOTween.Spawn(go); // ✅ DOTween 스폰 팝
 
-    void MoveView(Tile t, int x, int y, bool combine)
+		return new Tile { value = value, view = go, mergedThisTurn = false };
+	}
+
+
+
+	void MoveView(Tile t, int x, int y, bool combine)
     {
         // === DOTween 우선, 없으면 기존 Moving, 둘 다 없으면 즉시 텔레포트 ===
         var mvd = t.view.GetComponent<MovingDOTween>();

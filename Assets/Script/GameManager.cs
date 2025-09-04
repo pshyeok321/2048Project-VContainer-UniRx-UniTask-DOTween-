@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 
@@ -37,9 +37,9 @@ public class GameManager : MonoBehaviour
 
     // 입력 잠금(간단 쿨다운)
     float inputUnlockAtUnscaled = 0f;
-    bool InputLocked => Time.unscaledTime < inputUnlockAtUnscaled;
+    bool InputLocked => TurnAnimTracker.Busy || Time.unscaledTime < inputUnlockAtUnscaled; // ✅ 애니 동기화
 
-    void Start()
+	void Start()
     {
         if (BestScore) BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
         if (Score && string.IsNullOrEmpty(Score.text)) Score.text = "0";
