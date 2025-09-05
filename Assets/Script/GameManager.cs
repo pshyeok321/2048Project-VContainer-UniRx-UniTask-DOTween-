@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using VContainer;
 
 public class GameManager : MonoBehaviour
 {
@@ -30,6 +31,13 @@ public class GameManager : MonoBehaviour
 
     TileManager tm;
 
+    [Inject]
+    public void Construct(TileManager tileManager)
+    {
+        this.tm = tileManager;
+        Debug.Log($"[DI] GameManager->TileManager id={tileManager.GetInstanceID()}");
+    }
+
     bool swiping, swipeConsumed, inputIsTouch;
     Vector3 firstPos;
     bool movedThisTurn, stopped;
@@ -44,9 +52,11 @@ public class GameManager : MonoBehaviour
         if (BestScore) BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
         if (Score && string.IsNullOrEmpty(Score.text)) Score.text = "0";
 
-        tm = gameObject.AddComponent<TileManager>();
-        tm.Setup(n, cellSize, originOffset, 4, 4);
+        if (!tm)
+            return;
 
+        // 주입된 tm에만 초기화 호출
+        tm.Setup(n, cellSize, originOffset, 4, 4);
         tm.Spawn(CurrentScore());
         tm.Spawn(CurrentScore());
     }

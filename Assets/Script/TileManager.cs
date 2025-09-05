@@ -1,8 +1,21 @@
 using UnityEngine;
+using System.Text;
 using System.Collections.Generic;
+using VContainer;
 
 public class TileManager : MonoBehaviour
 {
+
+    private IRandomProvider rng;   // 주입됨 (없으면 UnityEngine.Random 사용)
+    private ITileFactory factory;  // 주입됨 (없으면 기존 Instantiate 사용)
+
+    [Inject]
+    public void Construct(IRandomProvider rng, ITileFactory factory)
+    {
+        this.rng = rng;
+        this.factory = factory;
+    }
+
     [Header("Layout")]
     [SerializeField] Vector2 cellSize = new(1.2f, 1.2f);
     [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
@@ -12,7 +25,14 @@ public class TileManager : MonoBehaviour
     [SerializeField] int height = 4;
 
     GameObject[] prefabs;
-    class Tile { public int value; public GameObject view; public bool mergedThisTurn; }
+
+    class Tile
+    { 
+        public int value; 
+        public GameObject view; 
+        public bool mergedThisTurn; 
+    }
+
     Tile[,] grid;
 
     public enum Dir { Up, Down, Left, Right }
@@ -30,35 +50,51 @@ public class TileManager : MonoBehaviour
     public bool Spawn(int currentScore)
     {
         var empties = new List<Vector2Int>();
-        ForEachCell((x, y) => { if (grid[x, y] == null) empties.Add(new Vector2Int(x, y)); });
-        if (empties.Count == 0) return false;
+        ForEachCell((x, y) => 
+        {
+            if (grid[x, y] == null) 
+                empties.Add(new Vector2Int(x, y)); 
+        });
+
+        if (empties.Count == 0) 
+            return false;
 
         var c = empties[Random.Range(0, empties.Count)];
         float p2 = currentScore > 800 ? 0.8f : 0.9f;
         int val = Random.value < p2 ? 2 : 4;
 
         grid[c.x, c.y] = SpawnTile(val, c.x, c.y, pop: true);
+        
         return true;
     }
 
-    public bool IsGameOver()
-    {
-        bool anyEmpty = false;
-        ForEachCell((x, y) => { if (grid[x, y] == null) anyEmpty = true; });
-        if (anyEmpty) return false;
+	public bool IsGameOver()
+	{
+		bool anyEmpty = false;
+		ForEachCell((x, y) => 
+        { 
+            if (grid[x, y] == null) 
+                anyEmpty = true; 
+        });
+		
+        if (anyEmpty) 
+            return false;
 
-        for (int x = 0; x < width; x++)
-            for (int y = 0; y < height; y++)
-            {
-                int v = grid[x, y].value;
-                if ((In(x + 1, y) && grid[x + 1, y].value == v) ||
-                    (In(x, y + 1) && grid[x, y + 1].value == v))
-                    return false;
-            }
-        return true;
-    }
+		for (int x = 0; x < width; x++)
+		{
+			for (int y = 0; y < height; y++)
+			{
+				int v = grid[x, y].value;
+				if ((In(x + 1, y) && grid[x + 1, y].value == v) ||
+					(In(x, y + 1) && grid[x, y + 1].value == v))
+					return false;
+			}
+		}
 
-    public bool Sweep(Dir dir, out int addScore, out bool movedThisTurn)
+		return true;
+	}
+
+	public bool Sweep(Dir dir, out int addScore, out bool movedThisTurn)
     {
         movedThisTurn = false;
         addScore = 0;
@@ -84,7 +120,12 @@ public class TileManager : MonoBehaviour
                     SlideOrMerge(x, y, 0, dy, ref movedThisTurn, ref addScore);
         }
 
-        ForEachCell((x, y) => { if (grid[x, y] != null) grid[x, y].mergedThisTurn = false; });
+        ForEachCell((x, y) => 
+        {
+            if (grid[x, y] != null)
+                grid[x, y].mergedThisTurn = false; 
+        });
+
         return movedThisTurn;
     }
 
@@ -106,7 +147,17 @@ public class TileManager : MonoBehaviour
                 movedThisTurn = true;
                 int newVal = t.value * 2;
 
-                if (dst.view) Object.Destroy(dst.view);
+                if (dst.view)
+                {
+                    if (this.factory != null)
+                    {
+                        this.factory.Release(dst.view);
+                    }
+                    else
+                    {
+                        Object.Destroy(dst.view);
+                    }
+				}
 
                 MoveView(t, nx + dx, ny + dy, combine: true);
 
@@ -135,7 +186,13 @@ public class TileManager : MonoBehaviour
 		int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
 		idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
 
-		var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
+		//var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
+
+		var go = (factory != null)
+			? factory.Create(new Vector2Int(x, y), value, transform)
+			: Instantiate(prefabs[idx], transform);
+		if (factory == null) go.transform.position = CellToWorld(x, y);
+		TileFXDOTween.Spawn(go); // 기존 호출이 있다면 유지
 
 		// === DOTween/Moving 모두 지원 ===
 		var mvd = go.GetComponent<MovingDOTween>();
@@ -146,12 +203,10 @@ public class TileManager : MonoBehaviour
 			if (mv) mv.SetLayout(cellSize, originOffset);
 		}
 
-		if (pop) TileFXDOTween.Spawn(go); // ✅ DOTween 스폰 팝
+		if (pop) TileFXDOTween.Spawn(go); // DOTween 스폰 팝
 
 		return new Tile { value = value, view = go, mergedThisTurn = false };
 	}
-
-
 
 	void MoveView(Tile t, int x, int y, bool combine)
     {
@@ -168,7 +223,6 @@ public class TileManager : MonoBehaviour
 
     Vector3 CellToWorld(int x, int y) =>
         new(originOffset.x + cellSize.x * x, originOffset.y + cellSize.y * y, 0);
-
     bool In(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
     void ForEachCell(System.Action<int, int> f) { for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) f(x, y); }
 }

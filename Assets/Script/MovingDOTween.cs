@@ -40,7 +40,7 @@ public class MovingDOTween : MonoBehaviour
 		KillActive(false);
 
 		bool completed = false;
-		TurnAnimTracker.Inc(); // ✅ 트윈 참여
+		TurnAnimTracker.Inc(); // 트윈 참여
 
 		activeTween = transform.DOMove(targetPos, duration)
 			.SetEase(ease)
@@ -51,13 +51,13 @@ public class MovingDOTween : MonoBehaviour
 				activeTween = null;
 				if (combine)
 					Destroy(gameObject);
-				TurnAnimTracker.Dec(); // ✅ 정상 완료
+				TurnAnimTracker.Dec(); // 정상 완료
 			})
 			.OnKill(() =>
 			{
 				// AutoKill(완료 후)에도 OnKill이 호출되므로 이중 Dec 방지
 				if (!completed)
-					TurnAnimTracker.Dec(); // ✅ 강제 종료
+					TurnAnimTracker.Dec(); // 강제 종료
 				activeTween = null;
 			});
 	}
