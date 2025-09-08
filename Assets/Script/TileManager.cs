@@ -63,9 +63,11 @@ public class TileManager : MonoBehaviour
         if (empties.Count == 0)
             return false;
 
-        var c = empties[Random.Range(0, empties.Count)];
+        int index = rng != null ? rng.Range(0, empties.Count) : UnityEngine.Random.Range(0, empties.Count);
+        var c = empties[index];
         float p2 = currentScore > 800 ? 0.8f : 0.9f;
-        int val = Random.value < p2 ? 2 : 4;
+        float r = rng != null ? rng.Value01() : UnityEngine.Random.value;
+        int val = r < p2 ? 2 : 4;
 
         grid[c.x, c.y] = SpawnTile(val, c.x, c.y, pop: true);
         return true;
