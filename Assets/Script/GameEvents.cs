@@ -29,6 +29,7 @@ public readonly struct TileSpawnedEvent
 public sealed class GameEvents : System.IDisposable
 {
     public readonly Subject<TileManager.Dir> Input = new Subject<TileManager.Dir>();
+    public readonly Subject<Unit> GameOver = new Subject<Unit>();
 
     public readonly Subject<Unit> TurnStarted = new Subject<Unit>();
     public readonly Subject<bool> TurnEnded = new Subject<bool>(); // moved?
@@ -40,6 +41,8 @@ public sealed class GameEvents : System.IDisposable
     public void Dispose()
     {
         Input?.Dispose();
+        GameOver?.Dispose();
+
         TurnStarted?.Dispose();
         TurnEnded?.Dispose();
         ScoreChanged?.Dispose();

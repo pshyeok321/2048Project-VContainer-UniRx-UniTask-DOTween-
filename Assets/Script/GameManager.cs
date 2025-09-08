@@ -182,7 +182,11 @@ public class GameManager : MonoBehaviour
             if (ct.IsCancellationRequested) { turnRunning = false; return; }
 
             // 5) 게임오버 체크
-            if (tm.IsGameOver()) { stopped = true; if (Quit) Quit.SetActive(true); }
+            if (tm.IsGameOver())
+            { 
+                stopped = true;
+                events?.GameOver.OnNext(Unit.Default);
+            }
         }
 
         // ★ 턴 종료 이벤트(이동 여부 포함)

@@ -13,7 +13,6 @@ public sealed class DebugEventLogger : MonoBehaviour
 
     void OnEnable()
     {
-        Debug.LogError("!");
         if (events == null) return;
         cd = new CompositeDisposable();
         events.TurnStarted.Subscribe(_ => Debug.Log("[EV] TurnStarted")).AddTo(cd);
@@ -22,7 +21,6 @@ public sealed class DebugEventLogger : MonoBehaviour
         events.BestChanged.Subscribe(b => Debug.Log($"[EV] Best={b}")).AddTo(cd);
         events.TileSpawned.Subscribe(t => Debug.Log($"[EV] Spawn {t.Value} @ {t.Cell}")).AddTo(cd);
         events.Merge.Subscribe(m => Debug.Log($"[EV] Merge {m.Value} x{m.Count} @ {m.Cell}")).AddTo(cd);
-        Debug.LogError("!!");
     }
 
     void OnDisable() => cd?.Dispose();
