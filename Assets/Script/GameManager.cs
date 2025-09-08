@@ -4,6 +4,8 @@ using UnityEngine.SceneManagement;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using VContainer;
+using UniRx;
+using System;
 
 public class GameManager : MonoBehaviour
 {
@@ -31,10 +33,15 @@ public class GameManager : MonoBehaviour
 
     TileManager tm;
 
+    // ★ UniRx 이벤트 허브
+    private GameEvents events;
+    private IDisposable inputSub;
+
     [Inject]
-    public void Construct(TileManager tileManager)
+    public void Construct(TileManager tileManager, GameEvents events) // ★ GameEvents 주입 추가
     {
         this.tm = tileManager;
+        this.events = events;      // ★ 보관
         Debug.Log($"[DI] GameManager->TileManager id={tileManager.GetInstanceID()}");
     }
 
@@ -47,7 +54,25 @@ public class GameManager : MonoBehaviour
     bool turnRunning;
     CancellationTokenSource turnCts;
 
-    void Start()
+	private void OnEnable()
+	{
+        inputSub = events?.Input
+            .ThrottleFirst(TimeSpan.FromMilliseconds(50))
+            .Where(_ => !turnRunning && !TurnAnimTracker.Busy && !stopped)
+            .Subscribe(dir => {
+                turnCts?.Cancel();
+                turnCts?.Dispose();
+                turnCts = new CancellationTokenSource();
+                RunTurnAsync(dir, turnCts.Token).Forget();
+            });
+    }
+
+	private void OnDisable()
+	{
+        inputSub?.Dispose();
+    }
+
+	void Start()
     {
         if (BestScore) BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
         if (Score && string.IsNullOrEmpty(Score.text)) Score.text = "0";
@@ -75,6 +100,12 @@ public class GameManager : MonoBehaviour
         // 애니 중이거나 턴 로직이 돌고 있으면 입력 차단
         if (turnRunning || TurnAnimTracker.Busy) return;
 
+        // (선택) 키보드 방향키도 같은 스트림으로 통합
+        if (Input.GetKeyDown(KeyCode.UpArrow)) events?.Input.OnNext(TileManager.Dir.Up);
+        if (Input.GetKeyDown(KeyCode.DownArrow)) events?.Input.OnNext(TileManager.Dir.Down);
+        if (Input.GetKeyDown(KeyCode.LeftArrow)) events?.Input.OnNext(TileManager.Dir.Left);
+        if (Input.GetKeyDown(KeyCode.RightArrow)) events?.Input.OnNext(TileManager.Dir.Right);
+
         if (BeginPressed())
         {
             swiping = true;
@@ -92,7 +123,9 @@ public class GameManager : MonoBehaviour
 
             if (!swipeConsumed && gap.magnitude >= threshold)
             {
+                swiping = false;       // 한 번만 쏘고 스와이프 종료 (선호에 따라 유지/삭제)
                 swipeConsumed = true;
+
                 var dir = GetSwipeDir(gap.normalized);
                 if (dir == Dir.None) return;
 
@@ -105,12 +138,8 @@ public class GameManager : MonoBehaviour
                     _ => TileManager.Dir.Left
                 };
 
-                // 🔄 이전 턴 취소(안전) 후, 새 턴 실행
-                turnCts?.Cancel();
-                turnCts?.Dispose();
-                turnCts = new CancellationTokenSource();
-
-                RunTurnAsync(tdir, turnCts.Token).Forget();
+                // ★ 변경 포인트: 실행 대신 발행만!
+                events?.Input.OnNext(tdir);
             }
         }
 
@@ -121,10 +150,14 @@ public class GameManager : MonoBehaviour
         }
     }
 
+
     async UniTaskVoid RunTurnAsync(TileManager.Dir tdir, CancellationToken ct)
     {
         if (turnRunning) return;
         turnRunning = true;
+
+        // ★ 턴 시작 이벤트
+        events?.TurnStarted.OnNext(Unit.Default);
 
         movedThisTurn = false;
         addScore = 0;
@@ -152,12 +185,16 @@ public class GameManager : MonoBehaviour
             if (tm.IsGameOver()) { stopped = true; if (Quit) Quit.SetActive(true); }
         }
 
+        // ★ 턴 종료 이벤트(이동 여부 포함)
+        events?.TurnEnded.OnNext(movedThisTurn);
+
         turnRunning = false;
     }
 
     void ApplyScore()
     {
         if (addScore <= 0) return;
+
         if (Plus)
         {
             Plus.text = $"+{addScore}    ";
@@ -166,13 +203,29 @@ public class GameManager : MonoBehaviour
         }
 
         int s = CurrentScore() + addScore;
+
+        // UI 반영
         if (Score) Score.text = s.ToString();
 
+        // 베스트 갱신 체크
+        bool bestUpdated = false;
         if (BestScore)
         {
-            if (PlayerPrefs.GetInt("BestScore", 0) < s) PlayerPrefs.SetInt("BestScore", s);
+            if (PlayerPrefs.GetInt("BestScore", 0) < s)
+            {
+                PlayerPrefs.SetInt("BestScore", s);
+                bestUpdated = true;
+            }
             BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
         }
+
+        // ★ 점수/베스트 이벤트 발행
+        events?.ScoreChanged.OnNext(new ScoreChangedEvent(s, addScore));
+        if (bestUpdated)
+        {
+            events?.BestChanged.OnNext(PlayerPrefs.GetInt("BestScore"));
+        }
+
         addScore = 0;
     }
 

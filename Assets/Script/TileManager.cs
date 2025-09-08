@@ -2,18 +2,22 @@ using UnityEngine;
 using System.Text;
 using System.Collections.Generic;
 using VContainer;
+// ★ UniRx 이벤트 타입은 GameEvents.cs에 있으니 별도 using 없이 참조만.
 
 public class TileManager : MonoBehaviour
 {
-
     private IRandomProvider rng;   // 주입됨 (없으면 UnityEngine.Random 사용)
     private ITileFactory factory;  // 주입됨 (없으면 기존 Instantiate 사용)
 
+    // ★ UniRx 이벤트 허브
+    private GameEvents events;
+
     [Inject]
-    public void Construct(IRandomProvider rng, ITileFactory factory)
+    public void Construct(IRandomProvider rng, ITileFactory factory, GameEvents events) // ★ GameEvents 주입 추가
     {
         this.rng = rng;
         this.factory = factory;
+        this.events = events; // ★ 보관
     }
 
     [Header("Layout")]
@@ -27,10 +31,10 @@ public class TileManager : MonoBehaviour
     GameObject[] prefabs;
 
     class Tile
-    { 
-        public int value; 
-        public GameObject view; 
-        public bool mergedThisTurn; 
+    {
+        public int value;
+        public GameObject view;
+        public bool mergedThisTurn;
     }
 
     Tile[,] grid;
@@ -50,13 +54,13 @@ public class TileManager : MonoBehaviour
     public bool Spawn(int currentScore)
     {
         var empties = new List<Vector2Int>();
-        ForEachCell((x, y) => 
+        ForEachCell((x, y) =>
         {
-            if (grid[x, y] == null) 
-                empties.Add(new Vector2Int(x, y)); 
+            if (grid[x, y] == null)
+                empties.Add(new Vector2Int(x, y));
         });
 
-        if (empties.Count == 0) 
+        if (empties.Count == 0)
             return false;
 
         var c = empties[Random.Range(0, empties.Count)];
@@ -64,37 +68,36 @@ public class TileManager : MonoBehaviour
         int val = Random.value < p2 ? 2 : 4;
 
         grid[c.x, c.y] = SpawnTile(val, c.x, c.y, pop: true);
-        
         return true;
     }
 
-	public bool IsGameOver()
-	{
-		bool anyEmpty = false;
-		ForEachCell((x, y) => 
-        { 
-            if (grid[x, y] == null) 
-                anyEmpty = true; 
+    public bool IsGameOver()
+    {
+        bool anyEmpty = false;
+        ForEachCell((x, y) =>
+        {
+            if (grid[x, y] == null)
+                anyEmpty = true;
         });
-		
-        if (anyEmpty) 
+
+        if (anyEmpty)
             return false;
 
-		for (int x = 0; x < width; x++)
-		{
-			for (int y = 0; y < height; y++)
-			{
-				int v = grid[x, y].value;
-				if ((In(x + 1, y) && grid[x + 1, y].value == v) ||
-					(In(x, y + 1) && grid[x, y + 1].value == v))
-					return false;
-			}
-		}
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                int v = grid[x, y].value;
+                if ((In(x + 1, y) && grid[x + 1, y].value == v) ||
+                    (In(x, y + 1) && grid[x, y + 1].value == v))
+                    return false;
+            }
+        }
 
-		return true;
-	}
+        return true;
+    }
 
-	public bool Sweep(Dir dir, out int addScore, out bool movedThisTurn)
+    public bool Sweep(Dir dir, out int addScore, out bool movedThisTurn)
     {
         movedThisTurn = false;
         addScore = 0;
@@ -120,10 +123,10 @@ public class TileManager : MonoBehaviour
                     SlideOrMerge(x, y, 0, dy, ref movedThisTurn, ref addScore);
         }
 
-        ForEachCell((x, y) => 
+        ForEachCell((x, y) =>
         {
             if (grid[x, y] != null)
-                grid[x, y].mergedThisTurn = false; 
+                grid[x, y].mergedThisTurn = false;
         });
 
         return movedThisTurn;
@@ -157,7 +160,7 @@ public class TileManager : MonoBehaviour
                     {
                         Object.Destroy(dst.view);
                     }
-				}
+                }
 
                 MoveView(t, nx + dx, ny + dy, combine: true);
 
@@ -165,9 +168,13 @@ public class TileManager : MonoBehaviour
                 grid[nx + dx, ny + dy] = SpawnTile(newVal, nx + dx, ny + dy, pop: true);
                 grid[nx + dx, ny + dy].mergedThisTurn = true;
 
-				TileFXDOTween.Merge(grid[nx + dx, ny + dy].view); // ✅ 머지 임팩트
+                TileFXDOTween.Merge(grid[nx + dx, ny + dy].view); // ✅ 머지 임팩트
 
-				addScore += newVal;
+                addScore += newVal;
+
+                // ★ 머지 이벤트 발행 (항상 2개 병합, 도착 좌표 기준)
+                events?.Merge.OnNext(new MergeEvent(newVal, 2, new Vector2Int(nx + dx, ny + dy)));
+
                 return;
             }
         }
@@ -181,34 +188,35 @@ public class TileManager : MonoBehaviour
         }
     }
 
-	Tile SpawnTile(int value, int x, int y, bool pop)
-	{
-		int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
-		idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
+    Tile SpawnTile(int value, int x, int y, bool pop)
+    {
+        int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
+        idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
 
-		//var go = Object.Instantiate(prefabs[idx], CellToWorld(x, y), Quaternion.identity);
+        var go = (factory != null)
+            ? factory.Create(new Vector2Int(x, y), value, transform)
+            : Instantiate(prefabs[idx], transform);
+        if (factory == null) go.transform.position = CellToWorld(x, y);
+        TileFXDOTween.Spawn(go); // 기존 호출이 있다면 유지
 
-		var go = (factory != null)
-			? factory.Create(new Vector2Int(x, y), value, transform)
-			: Instantiate(prefabs[idx], transform);
-		if (factory == null) go.transform.position = CellToWorld(x, y);
-		TileFXDOTween.Spawn(go); // 기존 호출이 있다면 유지
+        // === DOTween/Moving 모두 지원 ===
+        var mvd = go.GetComponent<MovingDOTween>();
+        if (mvd) mvd.SetLayout(cellSize, originOffset);
+        else
+        {
+            var mv = go.GetComponent<Moving>();
+            if (mv) mv.SetLayout(cellSize, originOffset);
+        }
 
-		// === DOTween/Moving 모두 지원 ===
-		var mvd = go.GetComponent<MovingDOTween>();
-		if (mvd) mvd.SetLayout(cellSize, originOffset);
-		else
-		{
-			var mv = go.GetComponent<Moving>();
-			if (mv) mv.SetLayout(cellSize, originOffset);
-		}
+        if (pop) TileFXDOTween.Spawn(go); // DOTween 스폰 팝
 
-		if (pop) TileFXDOTween.Spawn(go); // DOTween 스폰 팝
+        // ★ 스폰 이벤트 발행
+        events?.TileSpawned.OnNext(new TileSpawnedEvent(value, new Vector2Int(x, y)));
 
-		return new Tile { value = value, view = go, mergedThisTurn = false };
-	}
+        return new Tile { value = value, view = go, mergedThisTurn = false };
+    }
 
-	void MoveView(Tile t, int x, int y, bool combine)
+    void MoveView(Tile t, int x, int y, bool combine)
     {
         // === DOTween 우선, 없으면 기존 Moving, 둘 다 없으면 즉시 텔레포트 ===
         var mvd = t.view.GetComponent<MovingDOTween>();

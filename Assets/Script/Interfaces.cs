@@ -1,4 +1,4 @@
-public interface IRandomProvider
+ï»¿public interface IRandomProvider
 {
     int Range(int minInclusive, int maxExclusive);
     float Value01();
@@ -8,12 +8,12 @@ public interface IRandomProvider
 public interface ITileFactory
 {
     /// <summary>
-    /// ¼¿ ÁÂÇ¥¿Í °ª¿¡ ÇØ´çÇÏ´Â Å¸ÀÏÀ» »ı¼ºÇØ parent ÇÏÀ§¿¡ ºÙÀÔ´Ï´Ù.
+    /// ì…€ ì¢Œí‘œì™€ ê°’ì— í•´ë‹¹í•˜ëŠ” íƒ€ì¼ì„ ìƒì„±í•´ parent í•˜ìœ„ì— ë¶™ì…ë‹ˆë‹¤.
     /// </summary>
     UnityEngine.GameObject Create(UnityEngine.Vector2Int cell, int value, UnityEngine.Transform parent);
 
     /// <summary>
-    /// Å¸ÀÏ ¹İÈ¯(±âº» ±¸ÇöÀº Destroy). Ç®¸µ µµÀÔ ½Ã Release¸¸ ¹Ù²Ù¸é µÊ.
+    /// íƒ€ì¼ ë°˜í™˜(ê¸°ë³¸ êµ¬í˜„ì€ Destroy). í’€ë§ ë„ì… ì‹œ Releaseë§Œ ë°”ê¾¸ë©´ ë¨.
     /// </summary>
     void Release(UnityEngine.GameObject tile);
 }

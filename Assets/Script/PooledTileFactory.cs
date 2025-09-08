@@ -1,4 +1,4 @@
-using UnityEngine;
+癤퓎sing UnityEngine;
 using UnityEngine.Pool;
 using DG.Tweening;
 
@@ -33,7 +33,6 @@ public class PooledTileFactory : ITileFactory
                     var tag = go.GetComponent<PooledTileTag>() ?? go.AddComponent<PooledTileTag>();
                     tag.poolIndex = idx;
 
-                    // 레이아웃 주입(재사용 시에도 안전)
                     var mvT = go.GetComponent<MovingDOTween>();
                     if (mvT) mvT.SetLayout(cellSize, originOffset);
                     var mv = go.GetComponent<Moving>();
@@ -41,11 +40,10 @@ public class PooledTileFactory : ITileFactory
                     return go;
                 },
                 actionOnGet: go => {
-                    go.transform.localScale = Vector3.one; // 스케일 초기화
+                    go.transform.localScale = Vector3.one;
                     go.SetActive(true);
                 },
                 actionOnRelease: go => {
-                    // 안전: 모든 해당 오브젝트 트윈 중지(Dec는 각 컴포넌트 OnDisable/OnKill에서 처리)
                     DOTween.Kill(go, complete: false);
                     go.SetActive(false);
                     go.transform.SetParent(poolRoot, false);
@@ -62,9 +60,8 @@ public class PooledTileFactory : ITileFactory
         int idx = Mathf.Clamp(Mathf.RoundToInt(Mathf.Log(value, 2)) - 1, 0, prefabs.Length - 1);
         var go = pools[idx].Get();
         go.transform.position = CellToWorld(cell.x, cell.y);
-        if (parent) go.transform.SetParent(parent, true); // 월드 좌표 유지
+        if (parent) go.transform.SetParent(parent, true);
 
-        // 재사용 시 레이아웃 보정(옵션)
         var mvT = go.GetComponent<MovingDOTween>();
         if (mvT) mvT.SetLayout(cellSize, originOffset);
         var mv = go.GetComponent<Moving>();
@@ -82,7 +79,6 @@ public class PooledTileFactory : ITileFactory
         }
         else
         {
-            // 풀 인덱스를 모르면 안전하게 파괴 (개발 중 혼용 방지)
             Object.Destroy(tile);
         }
     }
@@ -93,6 +89,6 @@ public class PooledTileFactory : ITileFactory
 
 public class PooledTileTag : MonoBehaviour
 {
-    public int poolIndex = -1; // 어느 풀에서 온 타일인지 표시
+    public int poolIndex = -1;
 }
 

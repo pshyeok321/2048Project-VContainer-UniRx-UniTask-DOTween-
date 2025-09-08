@@ -1,17 +1,17 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using VContainer;
 using VContainer.Unity;
 
 public class GameLifetimeScope : LifetimeScope
 {
-    [Header("Bindings (¼±ÅÃ)")]
+    [Header("Bindings (ì„ íƒ)")]
     [SerializeField] GameManager gameManager;
     [SerializeField] TileManager tileManager;
 
-    [Header("Tile Prefabs (2,4,8,... ¼ø¼­)")]
+    [Header("Tile Prefabs (2,4,8,... ìˆœì„œ)")]
     [SerializeField] GameObject[] tilePrefabs;
 
-    [Header("Layout (ÆÑÅä¸®¿¡¼­ ÁÂÇ¥°è °è»ê¿¡ »ç¿ë)")]
+    [Header("Layout (íŒ©í† ë¦¬ì—ì„œ ì¢Œí‘œê³„ ê³„ì‚°ì— ì‚¬ìš©)")]
     [SerializeField] Vector2 cellSize = new(1.2f, 1.2f);
     [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
 
@@ -25,7 +25,7 @@ public class GameLifetimeScope : LifetimeScope
 			   .WithParameter("maxSize", 256)
 			   .WithParameter("collectionCheck", false);
 
-		// Scene Components ÁÖÀÔ (Drag&DropÀ» ¾È Çß´Ù¸é Hierarchy¿¡¼­ ÀÚµ¿ Å½»ö)
+		// Scene Components ì£¼ì… (Drag&Dropì„ ì•ˆ í–ˆë‹¤ë©´ Hierarchyì—ì„œ ìë™ íƒìƒ‰)
 		if (gameManager != null) 
 			builder.RegisterComponent(gameManager);
 		else
@@ -35,5 +35,11 @@ public class GameLifetimeScope : LifetimeScope
 			builder.RegisterComponent(tileManager);
 		else
 			builder.RegisterComponentInHierarchy<TileManager>();
+
+		builder.Register<GameEvents>(Lifetime.Singleton);
+
+		builder.RegisterComponentInHierarchy<DebugEventLogger>();
+
+
 	}
 }
