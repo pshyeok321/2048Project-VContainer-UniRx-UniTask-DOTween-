@@ -13,6 +13,8 @@ public class GameManager : MonoBehaviour
     public GameObject Quit;       // 게임오버 패널
     public Text Score, BestScore, Plus;
 
+    int score, best;
+
     [Header("Layout")]
     [SerializeField] Vector2 cellSize = new(1.2f, 1.2f);
     [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
@@ -74,10 +76,12 @@ public class GameManager : MonoBehaviour
 
 	void Start()
     {
-        if (BestScore) BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
-        if (Score && string.IsNullOrEmpty(Score.text)) Score.text = "0";
+		best = PlayerPrefs.GetInt("BestScore", 0);
+		score = 0;
+		events?.ScoreChanged.OnNext(new ScoreChangedEvent(score, 0));
+		events?.BestChanged.OnNext(best);
 
-        if (!tm)
+		if (!tm)
             return;
 
         // 주입된 tm에만 초기화 호출
@@ -199,41 +203,24 @@ public class GameManager : MonoBehaviour
     {
         if (addScore <= 0) return;
 
-        if (Plus)
-        {
-            Plus.text = $"+{addScore}    ";
-            var anim = Plus.GetComponent<Animator>();
-            if (anim) { anim.SetTrigger("PlusBack"); anim.SetTrigger("Plus"); }
-        }
+        score += addScore;
 
-        int s = CurrentScore() + addScore;
-
-        // UI 반영
-        if (Score) Score.text = s.ToString();
-
-        // 베스트 갱신 체크
         bool bestUpdated = false;
-        if (BestScore)
+        if (score > PlayerPrefs.GetInt("BestScore", 0))
         {
-            if (PlayerPrefs.GetInt("BestScore", 0) < s)
-            {
-                PlayerPrefs.SetInt("BestScore", s);
-                bestUpdated = true;
-            }
-            BestScore.text = PlayerPrefs.GetInt("BestScore").ToString();
+            PlayerPrefs.SetInt("BestScore", score);
+            best = score;
+            bestUpdated = true;
         }
 
-        // ★ 점수/베스트 이벤트 발행
-        events?.ScoreChanged.OnNext(new ScoreChangedEvent(s, addScore));
-        if (bestUpdated)
-        {
-            events?.BestChanged.OnNext(PlayerPrefs.GetInt("BestScore"));
-        }
+        events?.ScoreChanged.OnNext(new ScoreChangedEvent(score, addScore));
+        if (bestUpdated) events?.BestChanged.OnNext(best);
 
         addScore = 0;
     }
 
-    int CurrentScore() => Score ? int.Parse(Score.text) : 0;
+
+    int CurrentScore() => score;
 
     Vector3 CurrentPointerPos()
     {

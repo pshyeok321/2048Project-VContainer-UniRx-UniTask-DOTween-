@@ -1,12 +1,11 @@
-// Optional: simple UI binder that listens to GameEvents.
-// Attach to a Canvas object and assign Text fields.
-// If you use TextMeshPro, switch types accordingly.
 using UniRx;
+
 using UnityEngine;
 using UnityEngine.UI;
+
 using VContainer;
 
-public sealed class UniRxScorePresenter : MonoBehaviour
+public sealed class ScorePresenter : MonoBehaviour
 {
     [SerializeField] Text scoreText;
     [SerializeField] Text bestText;
@@ -14,8 +13,7 @@ public sealed class UniRxScorePresenter : MonoBehaviour
     GameEvents events;
     CompositeDisposable cd;
 
-    [Inject]
-    public void Construct(GameEvents events) => this.events = events;
+    [Inject] public void Construct(GameEvents e) => events = e;
 
     void OnEnable()
     {
@@ -27,12 +25,9 @@ public sealed class UniRxScorePresenter : MonoBehaviour
               .AddTo(cd);
 
         events.BestChanged
-              .Subscribe(best => { if (bestText) bestText.text = best.ToString(); })
+              .Subscribe(b => { if (bestText) bestText.text = b.ToString(); })
               .AddTo(cd);
     }
 
-    void OnDisable()
-    {
-        cd?.Dispose();
-    }
+    void OnDisable() => cd?.Dispose();
 }
