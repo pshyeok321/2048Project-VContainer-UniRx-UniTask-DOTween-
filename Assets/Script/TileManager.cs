@@ -9,7 +9,7 @@ public class TileManager : MonoBehaviour
     private IRandomProvider rng;   // 주입됨 (없으면 UnityEngine.Random 사용)
     private ITileFactory factory;  // 주입됨 (없으면 기존 Instantiate 사용)
 
-    // ★ UniRx 이벤트 허브
+    // UniRx 이벤트 허브
     private GameEvents events;
 
     [Inject]
@@ -41,9 +41,9 @@ public class TileManager : MonoBehaviour
 
     public enum Dir { Up, Down, Left, Right }
 
-    public void Setup(GameObject[] prefabs, Vector2 cellSize, Vector2 originOffset, int w = 4, int h = 4)
+    public void Setup(Vector2 cellSize, Vector2 originOffset, int w = 4, int h = 4)
     {
-        this.prefabs = prefabs;
+        this.prefabs = null;
         this.cellSize = cellSize;
         this.originOffset = originOffset;
         this.width = w;
@@ -172,7 +172,7 @@ public class TileManager : MonoBehaviour
 
                 addScore += newVal;
 
-                // ★ 머지 이벤트 발행 (항상 2개 병합, 도착 좌표 기준)
+                // 머지 이벤트 발행 (항상 2개 병합, 도착 좌표 기준)
                 events?.Merge.OnNext(new MergeEvent(newVal, 2, new Vector2Int(nx + dx, ny + dy)));
 
                 return;
@@ -190,16 +190,32 @@ public class TileManager : MonoBehaviour
 
     Tile SpawnTile(int value, int x, int y, bool pop)
     {
-        int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
-        idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
+        GameObject go;
 
-        var go = (factory != null)
-            ? factory.Create(new Vector2Int(x, y), value, transform)
-            : Instantiate(prefabs[idx], transform);
-        if (factory == null) go.transform.position = CellToWorld(x, y);
-        TileFXDOTween.Spawn(go); // 기존 호출이 있다면 유지
+        if (factory != null)
+        {
+            // DI된 팩토리가 전담 생성
+            go = factory.Create(new Vector2Int(x, y), value, transform);
+        }
+        else
+        {
+            // 팩토리가 없을 때만 프리팹 인덱싱
+            if (prefabs == null || prefabs.Length == 0)
+            {
+                Debug.LogError("[TileManager] Prefabs not assigned and no factory. Cannot spawn tile.");
+                return null;
+            }
 
-        // === DOTween/Moving 모두 지원 ===
+            int idx = Mathf.RoundToInt(Mathf.Log(value, 2)) - 1;
+            idx = Mathf.Clamp(idx, 0, prefabs.Length - 1);
+
+            go = Instantiate(prefabs[idx], transform);
+            go.transform.position = CellToWorld(x, y);
+        }
+
+        TileFXDOTween.Spawn(go);
+
+        // DOTween/Moving 모두 지원
         var mvd = go.GetComponent<MovingDOTween>();
         if (mvd) mvd.SetLayout(cellSize, originOffset);
         else
@@ -210,11 +226,12 @@ public class TileManager : MonoBehaviour
 
         if (pop) TileFXDOTween.Spawn(go); // DOTween 스폰 팝
 
-        // ★ 스폰 이벤트 발행
+        // 이벤트 발행
         events?.TileSpawned.OnNext(new TileSpawnedEvent(value, new Vector2Int(x, y)));
 
         return new Tile { value = value, view = go, mergedThisTurn = false };
     }
+
 
     void MoveView(Tile t, int x, int y, bool combine)
     {
@@ -231,6 +248,8 @@ public class TileManager : MonoBehaviour
 
     Vector3 CellToWorld(int x, int y) =>
         new(originOffset.x + cellSize.x * x, originOffset.y + cellSize.y * y, 0);
+
     bool In(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
+
     void ForEachCell(System.Action<int, int> f) { for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) f(x, y); }
 }

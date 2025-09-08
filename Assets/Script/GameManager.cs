@@ -9,16 +9,6 @@ using System;
 
 public class GameManager : MonoBehaviour
 {
-    public GameObject[] n;        // 2,4,8,... 프리팹 17개
-    public GameObject Quit;       // 게임오버 패널
-    public Text Score, BestScore, Plus;
-
-    int score, best;
-
-    [Header("Layout")]
-    [SerializeField] Vector2 cellSize = new(1.2f, 1.2f);
-    [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
-
     [Header("Input")]
     [SerializeField] float swipeThresholdPixels = 100f;
     [SerializeField] bool useDpiForSwipe = true;
@@ -50,7 +40,7 @@ public class GameManager : MonoBehaviour
     bool swiping, swipeConsumed, inputIsTouch;
     Vector3 firstPos;
     bool movedThisTurn, stopped;
-    int addScore;
+    int score, best, addScore;
 
     // UniTask 턴 실행 상태
     bool turnRunning;
@@ -81,11 +71,11 @@ public class GameManager : MonoBehaviour
 		events?.ScoreChanged.OnNext(new ScoreChangedEvent(score, 0));
 		events?.BestChanged.OnNext(best);
 
+        // TileManager의 초기화는 LifeTimeScpoe에서 처리 함
 		if (!tm)
             return;
 
         // 주입된 tm에만 초기화 호출
-        tm.Setup(n, cellSize, originOffset, 4, 4);
         tm.Spawn(CurrentScore());
         tm.Spawn(CurrentScore());
     }

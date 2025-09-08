@@ -14,6 +14,8 @@ public class GameLifetimeScope : LifetimeScope
     [Header("Layout (팩토리에서 좌표계 계산에 사용)")]
     [SerializeField] Vector2 cellSize = new(1.2f, 1.2f);
     [SerializeField] Vector2 originOffset = new(-1.8f, -1.8f);
+	[SerializeField] int width = 4;
+	[SerializeField] int height = 4;
 
 	protected override void Configure(IContainerBuilder builder)
 	{
@@ -24,6 +26,12 @@ public class GameLifetimeScope : LifetimeScope
 			   .WithParameter("originOffset", originOffset)
 			   .WithParameter("maxSize", 256)
 			   .WithParameter("collectionCheck", false);
+
+		builder.RegisterBuildCallback(c =>
+		{
+			var tm = c.Resolve<TileManager>();
+			tm.Setup(cellSize, originOffset, width, height);
+		});
 
 		// Scene Components 주입 (Drag&Drop을 안 했다면 Hierarchy에서 자동 탐색)
 		if (gameManager != null) 
