@@ -1,39 +1,31 @@
 using UniRx;
 
 using UnityEngine;
-using UnityEngine.UI;
 
 using VContainer;
 
 public sealed class PlusPresenter : MonoBehaviour
 {
-    [SerializeField] Text plusText;       // 기존 Plus Text
-    [SerializeField] Animator animator;   // Plus에 붙어 있던 Animator
+	PlusModel model;
+	PlusView view;
+	CompositeDisposable cd;
 
-    GameEvents events;
-    CompositeDisposable cd;
+	[Inject]
+	public void Construct(PlusModel model, PlusView view)
+	{
+		this.model = model;
+		this.view = view;
+	}
 
-    [Inject] public void Construct(GameEvents e) => events = e;
+	void OnEnable()
+	{
+		if (model == null || view == null) return;
+		cd = new CompositeDisposable();
 
-    void OnEnable()
-    {
-        if (events == null) return;
-        cd = new CompositeDisposable();
+		model.Delta
+			.Subscribe(view.Show)
+			.AddTo(cd);
+	}
 
-        events.ScoreChanged
-              .Where(e => e.Delta > 0)
-              .Subscribe(e =>
-              {
-                  if (plusText) plusText.text = $"+{e.Delta}    ";
-                  if (animator)
-                  {
-                      animator.ResetTrigger("Plus");     // 안전
-                      animator.SetTrigger("PlusBack");
-                      animator.SetTrigger("Plus");
-                  }
-              })
-              .AddTo(cd);
-    }
-
-    void OnDisable() => cd?.Dispose();
+	void OnDisable() => cd?.Dispose();
 }

@@ -4,20 +4,23 @@ using VContainer;
 
 public sealed class GameOverPresenter : MonoBehaviour
 {
-    [SerializeField] GameObject quitPanel; // 기존 Quit 패널 드래그
-    GameEvents events;
+    GameOverModel model;
+    GameOverView view;
     CompositeDisposable cd;
 
-    [Inject] public void Construct(GameEvents e) => events = e;
+    [Inject] public void Construct(GameOverModel model, GameOverView view) 
+    {
+        this.model = model;
+        this.view = view;
+    }
 
     void OnEnable()
     {
-        if (events == null) return;
+        if (model == null || view == null) return;
         cd = new CompositeDisposable();
-        events.GameOver.Subscribe(_ =>
-        {
-            if (quitPanel) quitPanel.SetActive(true);
-        }).AddTo(cd);
+        model.IsOver
+            .Subscribe(view.ShowQuitPanel)
+            .AddTo(cd);
     }
 
     void OnDisable() => cd?.Dispose();

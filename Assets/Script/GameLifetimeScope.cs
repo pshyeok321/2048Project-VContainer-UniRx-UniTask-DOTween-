@@ -44,11 +44,17 @@ public class GameLifetimeScope : LifetimeScope
                 else
                         builder.RegisterComponentInHierarchy<TileManager>();
 
-                builder.Register<GameEvents>(Lifetime.Singleton);
-                builder.Register<ScoreModel>(Lifetime.Singleton);
-                builder.RegisterComponentInHierarchy<DebugEventLogger>();
-                builder.RegisterComponentInHierarchy<GameOverPresenter>();
-                builder.RegisterComponentInHierarchy<ScorePresenter>();
-                builder.RegisterComponentInHierarchy<PlusPresenter>();
-        }
+		builder.Register<GameEvents>(Lifetime.Singleton);
+		builder.Register<ScoreModel>(Lifetime.Singleton);
+		builder.Register<PlusModel>(Lifetime.Singleton);
+		builder.Register<GameOverModel>(Lifetime.Singleton);
+		builder.RegisterComponentInHierarchy<DebugEventLogger>();
+		builder.RegisterComponentInHierarchy<GameOverPresenter>();
+		builder.RegisterComponentInHierarchy<ScorePresenter>();
+		builder.RegisterComponentInHierarchy<PlusPresenter>();
+		builder.RegisterComponentInHierarchy<GameOverView>();
+		builder.RegisterComponentInHierarchy<ScoreView>();
+		builder.RegisterComponentInHierarchy<PlusView>();
+
+	}
 }

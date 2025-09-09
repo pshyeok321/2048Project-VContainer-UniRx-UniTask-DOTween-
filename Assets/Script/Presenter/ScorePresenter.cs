@@ -3,13 +3,17 @@ using UnityEngine;
 using VContainer;
 
 public sealed class ScorePresenter : MonoBehaviour
-{
-    [SerializeField] ScoreView view;
-
+{    
     ScoreModel model;
+    ScoreView view;
     CompositeDisposable cd;
 
-    [Inject] public void Construct(ScoreModel model) => this.model = model;
+    [Inject]
+    public void Construct(ScoreModel model, ScoreView view)
+    {
+        this.model = model;
+        this.view = view;
+    }
 
     void OnEnable()
     {
