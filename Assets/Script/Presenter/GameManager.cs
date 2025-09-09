@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using System.Threading;
 using Cysharp.Threading.Tasks;
@@ -28,19 +27,21 @@ public class GameManager : MonoBehaviour
     // ★ UniRx 이벤트 허브
     private GameEvents events;
     private IDisposable inputSub;
+    private ScoreModel scoreModel;
 
     [Inject]
-    public void Construct(TileManager tileManager, GameEvents events) // ★ GameEvents 주입 추가
+    public void Construct(TileManager tileManager, GameEvents events, ScoreModel scoreModel) // ★ GameEvents 주입 추가
     {
         this.tm = tileManager;
         this.events = events;      // ★ 보관
+        this.scoreModel = scoreModel;
         Debug.Log($"[DI] GameManager->TileManager id={tileManager.GetInstanceID()}");
     }
 
     bool swiping, swipeConsumed, inputIsTouch;
     Vector3 firstPos;
     bool movedThisTurn, stopped;
-    int score, best, addScore;
+    int addScore;
 
     // UniTask 턴 실행 상태
     bool turnRunning;
@@ -64,12 +65,11 @@ public class GameManager : MonoBehaviour
         inputSub?.Dispose();
     }
 
-	void Start()
+        void Start()
     {
-		best = PlayerPrefs.GetInt("BestScore", 0);
-		score = 0;
-		events?.ScoreChanged.OnNext(new ScoreChangedEvent(score, 0));
-		events?.BestChanged.OnNext(best);
+                scoreModel.Reset();
+                events?.ScoreChanged.OnNext(new ScoreChangedEvent(scoreModel.Score.Value, 0));
+                events?.BestChanged.OnNext(scoreModel.Best.Value);
 
         // TileManager의 초기화는 LifeTimeScpoe에서 처리 함
 		if (!tm)
@@ -193,24 +193,16 @@ public class GameManager : MonoBehaviour
     {
         if (addScore <= 0) return;
 
-        score += addScore;
+        bool bestUpdated = scoreModel.Add(addScore);
 
-        bool bestUpdated = false;
-        if (score > PlayerPrefs.GetInt("BestScore", 0))
-        {
-            PlayerPrefs.SetInt("BestScore", score);
-            best = score;
-            bestUpdated = true;
-        }
-
-        events?.ScoreChanged.OnNext(new ScoreChangedEvent(score, addScore));
-        if (bestUpdated) events?.BestChanged.OnNext(best);
+        events?.ScoreChanged.OnNext(new ScoreChangedEvent(scoreModel.Score.Value, addScore));
+        if (bestUpdated) events?.BestChanged.OnNext(scoreModel.Best.Value);
 
         addScore = 0;
     }
 
 
-    int CurrentScore() => score;
+    int CurrentScore() => scoreModel.Score.Value;
 
     Vector3 CurrentPointerPos()
     {
