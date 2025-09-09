@@ -39,15 +39,16 @@ public class GameLifetimeScope : LifetimeScope
 		else
 			builder.RegisterComponentInHierarchy<GameManager>();
 		
-		if (tileManager != null)
-			builder.RegisterComponent(tileManager);
-		else
-			builder.RegisterComponentInHierarchy<TileManager>();
+                if (tileManager != null)
+                        builder.RegisterComponent(tileManager);
+                else
+                        builder.RegisterComponentInHierarchy<TileManager>();
 
-		builder.Register<GameEvents>(Lifetime.Singleton);
-		builder.RegisterComponentInHierarchy<DebugEventLogger>();
-		builder.RegisterComponentInHierarchy<GameOverPresenter>();
-		builder.RegisterComponentInHierarchy<ScorePresenter>();
-		builder.RegisterComponentInHierarchy<PlusPresenter>();
-	}
+                builder.Register<GameEvents>(Lifetime.Singleton);
+                builder.Register<ScoreModel>(Lifetime.Singleton);
+                builder.RegisterComponentInHierarchy<DebugEventLogger>();
+                builder.RegisterComponentInHierarchy<GameOverPresenter>();
+                builder.RegisterComponentInHierarchy<ScorePresenter>();
+                builder.RegisterComponentInHierarchy<PlusPresenter>();
+        }
 }
