@@ -36,28 +36,28 @@ Scripts/
   Manager/   GameManager, TileManager
   Model/     ScoreModel, PlusModel, GameOverModel
   Presenter/ ScorePresenter, PlusPresenter, GameOverPresenter
-  View/      ScoreView, PlusView, GameOverView, Moving(DOTween), TileFXDOTween, TurnAnimTracker, TurnAwaiter
-  Infra/     PooledTileFactory, RandomProvider, Interfaces, GameEvents
+  View/      ScoreView, PlusView, GameOverView, MovingDOTween, TileFXDOTween, TurnAnimTracker, TurnAwaiter
+  Infra/     PooledTileFactory, SystemRandomProvider, Interfaces, GameEvents
 ```
 - **Model**
   - `ScoreModel` : 현재 점수/최고 점수 스트림
-  - `PlusModel`  : 가산 점수(+X) 출력용 스트림
+  - `PlusModel`  : 가산 점수(+X) 스트림
   - `GameOverModel` : 게임오버 상태
   - (모델들은 `UnityEngine`에 의존하지 않음)
 - **Presenter**
-  - `ScorePresenter`, `PlusPresenter`, `GameOverPresenter` : View 인터페이스를 주입받아 스트림 구독→UI 반영
-  - `GameManager` : 입력→턴 진행 오케스트레이션(아래 참조)
+  - `ScorePresenter`, `PlusPresenter`, `GameOverPresenter` : View 인터페이스 주입 → 스트림 구독 → UI 반영
+  - `GameManager` : 입력 → 턴 오케스트레이션(아래 참조)
 - **View**
-  - `ScoreView`, `PlusView`, `GameOverView` : 텍스트/패널/애니메이터만 조작
-  - 이동/임팩트는 타일 프리팹의 DOTween 컴포넌트에서 처리(프레젠터/팩토리와 연결)
+  - `ScoreView`, `PlusView`, `GameOverView` : 텍스트/패널/애니메이터 조작
+  - 이동/임팩트는 타일 프리팹의 DOTween 컴포넌트에서 처리
 - **Infra**
   - `PooledTileFactory` : 타일 생성/회수/위치 지정
   - `GameEvents` : 입력/턴/점수/스폰/머지/게임오버 등 전역 이벤트 허브
 
 ### 이벤트 스트림
 - 입력/턴: `Input`, `TurnStarted`, `TurnEnded(moved)`  
-- 점수: `ScoreChanged{score,delta}`, `BestChanged`  
-- 타일: `TileSpawned{value,cell}`, `Merge{value,count,cell}`  
+- 점수: `ScoreChanged{score, delta}`, `BestChanged`  
+- 타일: `TileSpawned{value, cell}`, `Merge{value, count, cell}`  
 - 상태: `GameOver`
 
 ### 턴 오케스트레이션
@@ -103,25 +103,26 @@ builder.RegisterBuildCallback(c => {
 
 ### 풀링
 - `PooledTileFactory`가 **생성/회수/위치 지정**을 전담
-- 프리팹 인덱스: `idx = clamp(log2(value)-1)`
+- 프리팹 인덱스: `idx = clamp(log2(value) - 1)` **예:** 2→0, 4→1, 8→2 …
 - `PooledTileTag.poolIndex`로 올바른 풀에 반환
 
 ---
 
 ## 왜 MVP로 정리했나
-- **테스트 가능성**: 모델이 순수 C#이라 단위 테스트 쉬움
-- **치환성**: View/Presenter를 인터페이스 기반으로 주입 → 모킹/교체 간단
-- **협업 친화**: 연출은 View에서 자유롭게, 로직은 Model에서 안정적으로
-- **확장**: 새로운 UI는 Presenter만 추가하면 기존 스트림에 자연스럽게 연결
+- **테스트 가능성**: 모델이 순수 C#이라 단위 테스트 용이
+- **치환성/DI**: View/Presenter 인터페이스 주입으로 모킹·교체 간단
+- **협업 친화**: 연출은 View, 규칙은 Model로 분리 → 역할 명확
+- **확장**: 새로운 UI는 Presenter 추가만으로 스트림에 자연 연결
+- **적합성**: Rx 구독 기반 단방향 흐름으로 수명/의존 관계가 명시적
 
 ---
 
 ## LinkedPool을 선택한 이유
-- 연결 리스트 기반으로 **리사이즈/재할당 없이 O(1)** 입출
-- 설정 단순(`maxSize` 위주), N×N 보드 변경에도 튜닝 부담 적음
+- 연결 리스트 기반이라 **재할당 없이 O(1)** Get/Release (스파이크 완화)
+- **튜닝 단순**: `maxSize` 위주 설정 → N×N 보드 변경에도 부담 적음
 - `collectionCheck`로 중복/잘못된 Release 조기 검출
 
-> 초기 용량이 고정이라면 `ObjectPool<T>`도 적합하지만, 2048처럼 한 턴에 Spawn/Release가 몰리는 패턴에선 `LinkedPool<T>`가 더 예측 가능했다.
+> 초기 용량이 엄격히 고정이라면 `ObjectPool<T>`도 적합. 2048처럼 프레임 특정 시점에 Spawn/Release가 몰리는 패턴에는 `LinkedPool<T>`가 더 예측 가능했다.
 
 ---
 
@@ -150,7 +151,7 @@ builder.RegisterBuildCallback(c => {
 - **MVP 완성**: Model(순수 C#)/View(연출)/Presenter(중개)로 전면 재구성
 - **서드파티**: VContainer, UniRx, UniTask, DOTween
 - **입력 UX**: DPI 보정 스와이프, 애니 중 입력 잠금
-- **연출**: Moving(DOTween), TileFXDOTween, TurnAnimTracker
+- **연출**: MovingDOTween, TileFXDOTween, TurnAnimTracker
 - **턴 오케스트레이션**: UniTask await 체인
 - **풀링/DI**: `IRandomProvider`, `ITileFactory`, `PooledTileFactory(+Tag)`
 - **스트림화**: `GameEvents` + UI Presenters
@@ -184,8 +185,3 @@ builder.RegisterBuildCallback(c => {
 - 주의: 구독 해제 누수 → `AddTo(gameObject)`/`CompositeDisposable` 습관화
 
 **한줄 총평**: “턴 진행은 UniTask, 상태/입력은 UniRx” 조합이 역할 분담이 명확하고 유지보수성이 좋았다.
-
-### 3) 최종 소감
-- MVP로 정리하니 **테스트 가능성/치환성**이 확실히 좋아졌다.  
-- LinkedPool + DI로 프레임 안정성과 설정 일관성을 확보.  
-- 다음 과제는 입력 어댑터/스코어 저장소 추상화 강화, 타일 뷰 제어의 완전한 Presenter 이관이다.
